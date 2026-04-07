@@ -1,0 +1,262 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: drug-delivery-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: drug_delivery_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docs/DATABASE_SCHEMA.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - drug-delivery-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: drug-delivery-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - drug-delivery-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: drug-delivery-api-gateway
+    environment:
+      NODE_ENV: development
+      GATEWAY_PORT: 4000
+      FRONTEND_URL: http://localhost:3000
+      
+      # Service URLs
+      AUTH_SERVICE_URL: http://auth-service:5001
+      USER_SERVICE_URL: http://user-service:5002
+      MEDICINE_SERVICE_URL: http://medicine-service:5003
+      PRESCRIPTION_SERVICE_URL: http://prescription-service:5004
+      ORDER_SERVICE_URL: http://order-service:5005
+      DELIVERY_SERVICE_URL: http://delivery-service:5006
+      
+      # Database
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # JWT
+      JWT_SECRET: dev-secret-key-change-in-production
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./api-gateway/src:/app/src
+      - ./api-gateway/logs:/app/logs
+    command: npm run dev
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-auth-service
+    environment:
+      NODE_ENV: development
+      AUTH_SERVICE_PORT: 5001
+      
+      # Database
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+      
+      # JWT
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRY: 15m
+      REFRESH_TOKEN_SECRET: dev-refresh-secret-key
+      REFRESH_TOKEN_EXPIRY: 7d
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/auth-service/src:/app/src
+    command: npm run dev
+
+  # Medicine Service (Placeholder)
+  medicine-service:
+    build:
+      context: ./services/medicine-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-medicine-service
+    environment:
+      NODE_ENV: development
+      MEDICINE_SERVICE_PORT: 5003
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/medicine-service/src:/app/src
+    command: npm run dev
+
+  # User Service (Placeholder)
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-user-service
+    environment:
+      NODE_ENV: development
+      USER_SERVICE_PORT: 5002
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+    ports:
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/user-service/src:/app/src
+    command: npm run dev
+
+  # Prescription Service (Placeholder)
+  prescription-service:
+    build:
+      context: ./services/prescription-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-prescription-service
+    environment:
+      NODE_ENV: development
+      PRESCRIPTION_SERVICE_PORT: 5004
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+    ports:
+      - "5004:5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/prescription-service/src:/app/src
+    command: npm run dev
+
+  # Order Service (Placeholder)
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-order-service
+    environment:
+      NODE_ENV: development
+      ORDER_SERVICE_PORT: 5005
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+    ports:
+      - "5005:5005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/order-service/src:/app/src
+    command: npm run dev
+
+  # Delivery Service (Placeholder)
+  delivery-service:
+    build:
+      context: ./services/delivery-service
+      dockerfile: Dockerfile
+    container_name: drug-delivery-delivery-service
+    environment:
+      NODE_ENV: development
+      DELIVERY_SERVICE_PORT: 5006
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: drug_delivery_db
+    ports:
+      - "5006:5006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - drug-delivery-network
+    volumes:
+      - ./services/delivery-service/src:/app/src
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  drug-delivery-network:
+    driver: bridge
